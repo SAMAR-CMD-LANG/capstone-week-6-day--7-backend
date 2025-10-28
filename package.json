@@ -1,0 +1,39 @@
+{
+  "name": "day7_backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest --testPathPatterns=\"simple|api-endpoints\" --testTimeout=30000 --forceExit",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --testPathPatterns=\"simple|api-endpoints\" --coverage --testTimeout=30000 --forceExit",
+    "test:verbose": "jest --testPathPatterns=\"simple|api-endpoints\" --verbose --testTimeout=30000 --forceExit",
+    "test:auth": "jest __tests__/auth-simple.test.js --verbose --testTimeout=30000 --forceExit",
+    "test:posts": "jest __tests__/posts-simple.test.js --verbose --testTimeout=30000 --forceExit",
+    "test:endpoints": "jest __tests__/api-endpoints.test.js --verbose --testTimeout=30000 --forceExit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.76.1",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "nodemon": "^3.1.10",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.28.5",
+    "jest": "^30.2.0",
+    "supertest": "^7.1.4"
+  }
+}
