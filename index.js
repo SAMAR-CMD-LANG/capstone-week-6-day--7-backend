@@ -90,11 +90,11 @@ app.get("/auth/google",
   })
 );
 
-// Google OAuth callback route
+
 app.get("/auth/google/callback",
   passport.authenticate("google", {
     failureRedirect: `${process.env.FRONTEND_URL}/login?error=oauth_failed`,
-    session: false // We'll use JWT instead of sessions for consistency
+    session: false 
   }),
   (req, res) => {
     try {
@@ -105,14 +105,14 @@ app.get("/auth/google/callback",
         return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_user_data`);
       }
 
-      // Generate JWT token and set cookie (same as regular login)
+    
       generateTokenAndSetCookie(req.user, res);
 
-      // Redirect to frontend with success (no query params to avoid display issues)
+   
       res.redirect(`${process.env.FRONTEND_URL}/posts`);
     } catch (error) {
       console.error("Error in Google OAuth callback:", error);
-      // Check if it's a database migration error
+ 
       if (error.message && error.message.includes("migration required")) {
         res.redirect(`${process.env.FRONTEND_URL}/login?error=migration_required`);
       } else {

@@ -11,20 +11,18 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/auth/google/callback", 
+      callbackURL: "http://localhost:5000/auth/google/callback",
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        
-        const email = emails[0]?.value;
-        const name = displayName;
-        const profilePicture = photos[0]?.value;
+        const email = profile.emails[0]?.value;
+        const name = profile.displayName;
+        const profilePicture = profile.photos[0]?.value;
 
         if (!email) {
           return done(new Error("No email found in Google profile"), null);
         }
 
-      
         const { data: existingUser, error: fetchError } = await supabase
           .from("Users")
           .select("*")
@@ -32,19 +30,20 @@ passport.use(
           .single();
 
         if (existingUser && !fetchError) {
-         
-          console.log("Google OAuth: User already exists, logging in:", existingUser.email);
+          console.log(
+            "Google OAuth: User already exists, logging in:",
+            existingUser.email
+          );
           return done(null, existingUser);
         }
 
-      
         const { data: newUser, error: createError } = await supabase
           .from("Users")
           .insert([
             {
               name,
               email,
-              password: null, 
+              password: null,
             },
           ])
           .select()
@@ -68,7 +67,6 @@ passport.use(
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
-
 
 passport.deserializeUser(async (id, done) => {
   try {
