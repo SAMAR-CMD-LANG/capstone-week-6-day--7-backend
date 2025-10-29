@@ -63,7 +63,6 @@ async function authenticateToken(req, res, next) {
   }
 }
 
-
 function generateTokenAndSetCookie(user, res) {
   const token = jwt.sign(
     { id: user.id, email: user.email },
@@ -71,15 +70,19 @@ function generateTokenAndSetCookie(user, res) {
     { expiresIn: "24h" }
   );
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   res.cookie(process.env.COOKIE_NAME, token, {
     maxAge: 24 * 60 * 60 * 1000, 
     httpOnly: true,
-    sameSite: "lax",
-    secure: false,
+    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction, 
+    path: "/", 
   });
 
   return token;
 }
+
 
 
 
