@@ -24,7 +24,6 @@ passport.use(
 
         const email = profile.emails && profile.emails[0]?.value;
         const name = profile.displayName || profile.name?.givenName + " " + profile.name?.familyName;
-        const profilePicture = profile.photos && profile.photos[0]?.value;
 
         if (!email) {
           console.error("No email found in Google profile:", profile);
@@ -45,21 +44,6 @@ passport.use(
 
         if (existingUser && !fetchError) {
           console.log("Google OAuth: User already exists, logging in:", existingUser.email);
-
-          // Update profile picture if it's different
-          if (profilePicture && existingUser.profile_picture !== profilePicture) {
-            const { error: updateError } = await supabase
-              .from("Users")
-              .update({ profile_picture: profilePicture })
-              .eq("id", existingUser.id);
-
-            if (updateError) {
-              console.warn("Failed to update profile picture:", updateError);
-            } else {
-              existingUser.profile_picture = profilePicture;
-            }
-          }
-
           return done(null, existingUser);
         }
 
@@ -72,7 +56,6 @@ passport.use(
               name: name.trim(),
               email: email.toLowerCase().trim(),
               password: null, // OAuth users don't have passwords
-              profile_picture: profilePicture || null,
             },
           ])
           .select()

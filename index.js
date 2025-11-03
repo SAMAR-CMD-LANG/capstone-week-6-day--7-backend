@@ -240,8 +240,7 @@ app.post("/auth/login", async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
-        email: user.email,
-        profile_picture: user.profile_picture
+        email: user.email
       },
     });
   } catch (err) {
@@ -290,7 +289,7 @@ app.get("/auth/me", async (req, res) => {
 
     const { data: user, error } = await supabase
       .from("Users")
-      .select("id, name, email, created_at, profile_picture")
+      .select("id, name, email, created_at")
       .eq("id", decoded.id)
       .single();
 
@@ -305,8 +304,7 @@ app.get("/auth/me", async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        created_at: user.created_at,
-        profile_picture: user.profile_picture
+        created_at: user.created_at
       }
     });
   } catch (err) {
