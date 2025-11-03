@@ -58,12 +58,19 @@ async function authenticateToken(req, res, next) {
   const cookieToken = req.cookies && req.cookies[process.env.COOKIE_NAME];
   const token = headerToken || cookieToken;
 
+  console.log("Auth middleware - checking token:");
+  console.log("- Header token present:", !!headerToken);
+  console.log("- Cookie token present:", !!cookieToken);
+  console.log("- Using token from:", headerToken ? "header" : cookieToken ? "cookie" : "none");
+
   if (!token) {
+    console.log("No token found in request");
     return res.status(401).json({ message: "Invalid or no token found" });
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("Token verified successfully for user:", decoded.id);
     req.user = decoded;
     next();
   } catch (err) {
@@ -138,7 +145,8 @@ app.get("/auth/google/callback",
 
       // Add a small delay to ensure cookie is properly set
       setTimeout(() => {
-        res.redirect(`${process.env.FRONTEND_URL}/auth/callback?success=true`);
+        // Also pass the token as a URL parameter as a fallback
+        res.redirect(`${process.env.FRONTEND_URL}/auth/callback?success=true&token=${encodeURIComponent(token)}`);
       }, 100);
 
     } catch (error) {
@@ -256,21 +264,28 @@ app.get("/auth/me", async (req, res) => {
     console.log("Auth me request - headers:", req.headers);
     console.log("Auth me request - origin:", req.headers.origin);
 
+    const authHeader = req.headers["authorization"] || "";
+    const headerToken = authHeader && authHeader.split(" ")[1];
     const cookieToken = req.cookies && req.cookies[process.env.COOKIE_NAME];
+    const token = headerToken || cookieToken;
+
+    console.log("Header token found:", !!headerToken);
     console.log("Cookie token found:", !!cookieToken);
+    console.log("Using token from:", headerToken ? "header" : cookieToken ? "cookie" : "none");
     console.log("Cookie name being used:", process.env.COOKIE_NAME);
 
-    if (!cookieToken) {
-      console.log("No cookie token found");
+    if (!token) {
+      console.log("No token found in request");
       console.log("Available cookies:", Object.keys(req.cookies || {}));
       return res.status(401).json({
         user: null,
-        debug: "no_cookie",
-        availableCookies: Object.keys(req.cookies || {})
+        debug: "no_token",
+        availableCookies: Object.keys(req.cookies || {}),
+        hasAuthHeader: !!req.headers.authorization
       });
     }
 
-    const decoded = jwt.verify(cookieToken, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log("Token decoded successfully for user:", decoded.id);
 
     const { data: user, error } = await supabase
