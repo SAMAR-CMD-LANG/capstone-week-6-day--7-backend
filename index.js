@@ -15,8 +15,10 @@ const app = express();
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: [process.env.FRONTEND_URL, "https://capstone-week-6-day-7-frontend.vercel.app"],
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
@@ -79,7 +81,7 @@ function generateTokenAndSetCookie(user, res) {
     sameSite: isProduction ? "none" : "lax",
     secure: isProduction,
     path: "/",
-    domain: isProduction ? undefined : undefined, // Let browser handle domain
+    domain: isProduction ? undefined : undefined,
   });
 
   return token;
@@ -103,17 +105,20 @@ app.get("/auth/google/callback",
   }),
   (req, res) => {
     try {
-      console.log("Google OAuth callback - user data:", req.user); // Debug log
+      console.log("Google OAuth callback - user data:", req.user);
+      console.log("Environment:", process.env.NODE_ENV);
+      console.log("Frontend URL:", process.env.FRONTEND_URL);
 
       if (!req.user) {
         console.error("No user data received from Google OAuth");
         return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_user_data`);
       }
 
+      // Generate token and set cookie
+      const token = generateTokenAndSetCookie(req.user, res);
+      console.log("Token generated and cookie set for user:", req.user.email);
 
-      generateTokenAndSetCookie(req.user, res);
-
-
+      // Redirect to callback page
       res.redirect(`${process.env.FRONTEND_URL}/auth/callback`);
     } catch (error) {
       console.error("Error in Google OAuth callback:", error);
@@ -222,12 +227,20 @@ app.post("/auth/logout", (req, res) => {
 });
 app.get("/auth/me", async (req, res) => {
   try {
+    console.log("Auth me request - cookies:", req.cookies);
+    console.log("Auth me request - headers:", req.headers);
+
     const cookieToken = req.cookies && req.cookies[process.env.COOKIE_NAME];
+    console.log("Cookie token found:", !!cookieToken);
+
     if (!cookieToken) {
-      return res.status(401).json({ user: null });
+      console.log("No cookie token found");
+      return res.status(401).json({ user: null, debug: "no_cookie" });
     }
 
     const decoded = jwt.verify(cookieToken, process.env.JWT_SECRET);
+    console.log("Token decoded successfully for user:", decoded.id);
+
     const { data: user, error } = await supabase
       .from("Users")
       .select("id, name, email, created_at")
@@ -235,9 +248,11 @@ app.get("/auth/me", async (req, res) => {
       .single();
 
     if (error || !user) {
-      return res.status(401).json({ user: null });
+      console.log("User not found in database:", error);
+      return res.status(401).json({ user: null, debug: "user_not_found" });
     }
 
+    console.log("User found and returning:", user.email);
     res.json({
       user: {
         id: user.id,
@@ -248,7 +263,7 @@ app.get("/auth/me", async (req, res) => {
     });
   } catch (err) {
     console.error("Auth me error:", err);
-    res.status(401).json({ user: null });
+    res.status(401).json({ user: null, debug: "token_invalid" });
   }
 });
 app.get("/posts", async (req, res) => {
@@ -357,6 +372,20 @@ app.delete("/posts/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "internal server error" });
   }
 });
+// Test endpoint to check cookie setting
+app.get("/test-cookie", (req, res) => {
+  res.cookie("test", "value", {
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
+  res.json({ message: "Test cookie set", cookies: req.cookies });
+});
+
 app.listen(PORT, () => {
   console.log(`server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV}`);
+  console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
 });
