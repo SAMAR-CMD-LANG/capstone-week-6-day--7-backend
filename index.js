@@ -281,7 +281,14 @@ app.get("/posts", async (req, res) => {
 
     let query = supabase
       .from("Posts")
-      .select("*", { count: "exact" })
+      .select(`
+        *,
+        Users (
+          id,
+          name,
+          email
+        )
+      `, { count: "exact" })
       .order("created_at", { ascending: false });
 
     if (search) {
