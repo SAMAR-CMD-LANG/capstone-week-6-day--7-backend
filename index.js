@@ -30,8 +30,9 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, 
-      maxAge: 24 * 60 * 60 * 1000, 
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     },
   })
 );
@@ -73,11 +74,12 @@ function generateTokenAndSetCookie(user, res) {
   const isProduction = process.env.NODE_ENV === "production";
 
   res.cookie(process.env.COOKIE_NAME, token, {
-    maxAge: 24 * 60 * 60 * 1000, 
+    maxAge: 24 * 60 * 60 * 1000,
     httpOnly: true,
     sameSite: isProduction ? "none" : "lax",
-    secure: isProduction, 
-    path: "/", 
+    secure: isProduction,
+    path: "/",
+    domain: isProduction ? undefined : undefined, // Let browser handle domain
   });
 
   return token;
@@ -97,7 +99,7 @@ app.get("/auth/google",
 app.get("/auth/google/callback",
   passport.authenticate("google", {
     failureRedirect: `${process.env.FRONTEND_URL}/login?error=oauth_failed`,
-    session: false 
+    session: false
   }),
   (req, res) => {
     try {
@@ -108,14 +110,14 @@ app.get("/auth/google/callback",
         return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_user_data`);
       }
 
-    
+
       generateTokenAndSetCookie(req.user, res);
 
-   
-      res.redirect(`${process.env.FRONTEND_URL}/posts`);
+
+      res.redirect(`${process.env.FRONTEND_URL}/auth/callback`);
     } catch (error) {
       console.error("Error in Google OAuth callback:", error);
- 
+
       if (error.message && error.message.includes("migration required")) {
         res.redirect(`${process.env.FRONTEND_URL}/login?error=migration_required`);
       } else {
