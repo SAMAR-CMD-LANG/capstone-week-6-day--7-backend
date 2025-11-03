@@ -15,10 +15,16 @@ const app = express();
 
 app.use(
   cors({
-    origin: [process.env.FRONTEND_URL, "https://capstone-week-6-day-7-frontend.vercel.app"],
+    origin: [
+      process.env.FRONTEND_URL,
+      "https://capstone-week-6-day-7-frontend.vercel.app",
+      "http://localhost:3000", // For local development
+      /\.vercel\.app$/ // Allow all Vercel preview deployments
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    exposedHeaders: ['Set-Cookie'],
   })
 );
 
@@ -75,14 +81,24 @@ function generateTokenAndSetCookie(user, res) {
 
   const isProduction = process.env.NODE_ENV === "production";
 
-  res.cookie(process.env.COOKIE_NAME, token, {
-    maxAge: 24 * 60 * 60 * 1000,
+  // Enhanced cookie settings for better cross-origin support
+  const cookieOptions = {
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
     httpOnly: true,
-    sameSite: isProduction ? "none" : "lax",
-    secure: isProduction,
     path: "/",
-    domain: isProduction ? undefined : undefined,
-  });
+  };
+
+  if (isProduction) {
+    cookieOptions.sameSite = "none";
+    cookieOptions.secure = true;
+    // Don't set domain in production to allow cross-origin cookies
+  } else {
+    cookieOptions.sameSite = "lax";
+    cookieOptions.secure = false;
+  }
+
+  console.log("Setting cookie with options:", cookieOptions);
+  res.cookie(process.env.COOKIE_NAME, token, cookieOptions);
 
   return token;
 }
@@ -108,25 +124,34 @@ app.get("/auth/google/callback",
       console.log("Google OAuth callback - user data:", req.user);
       console.log("Environment:", process.env.NODE_ENV);
       console.log("Frontend URL:", process.env.FRONTEND_URL);
+      console.log("Request headers:", req.headers);
 
       if (!req.user) {
         console.error("No user data received from Google OAuth");
         return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_user_data`);
       }
 
-      // Generate token and set cookie
+      // Generate token and set cookie with enhanced settings
       const token = generateTokenAndSetCookie(req.user, res);
       console.log("Token generated and cookie set for user:", req.user.email);
+      console.log("Cookie settings applied");
 
-      // Redirect to callback page
-      res.redirect(`${process.env.FRONTEND_URL}/auth/callback`);
+      // Add a small delay to ensure cookie is properly set
+      setTimeout(() => {
+        res.redirect(`${process.env.FRONTEND_URL}/auth/callback?success=true`);
+      }, 100);
+
     } catch (error) {
       console.error("Error in Google OAuth callback:", error);
+      console.error("Error stack:", error.stack);
 
+      // More specific error handling
       if (error.message && error.message.includes("migration required")) {
         res.redirect(`${process.env.FRONTEND_URL}/login?error=migration_required`);
+      } else if (error.message && error.message.includes("duplicate")) {
+        res.redirect(`${process.env.FRONTEND_URL}/login?error=account_exists`);
       } else {
-        res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_callback_failed`);
+        res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_callback_failed&details=${encodeURIComponent(error.message)}`);
       }
     }
   }
@@ -229,13 +254,20 @@ app.get("/auth/me", async (req, res) => {
   try {
     console.log("Auth me request - cookies:", req.cookies);
     console.log("Auth me request - headers:", req.headers);
+    console.log("Auth me request - origin:", req.headers.origin);
 
     const cookieToken = req.cookies && req.cookies[process.env.COOKIE_NAME];
     console.log("Cookie token found:", !!cookieToken);
+    console.log("Cookie name being used:", process.env.COOKIE_NAME);
 
     if (!cookieToken) {
       console.log("No cookie token found");
-      return res.status(401).json({ user: null, debug: "no_cookie" });
+      console.log("Available cookies:", Object.keys(req.cookies || {}));
+      return res.status(401).json({
+        user: null,
+        debug: "no_cookie",
+        availableCookies: Object.keys(req.cookies || {})
+      });
     }
 
     const decoded = jwt.verify(cookieToken, process.env.JWT_SECRET);
@@ -243,13 +275,13 @@ app.get("/auth/me", async (req, res) => {
 
     const { data: user, error } = await supabase
       .from("Users")
-      .select("id, name, email, created_at")
+      .select("id, name, email, created_at, profile_picture")
       .eq("id", decoded.id)
       .single();
 
     if (error || !user) {
       console.log("User not found in database:", error);
-      return res.status(401).json({ user: null, debug: "user_not_found" });
+      return res.status(401).json({ user: null, debug: "user_not_found", error: error?.message });
     }
 
     console.log("User found and returning:", user.email);
@@ -258,12 +290,18 @@ app.get("/auth/me", async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        created_at: user.created_at
+        created_at: user.created_at,
+        profile_picture: user.profile_picture
       }
     });
   } catch (err) {
     console.error("Auth me error:", err);
-    res.status(401).json({ user: null, debug: "token_invalid" });
+    console.error("Auth me error stack:", err.stack);
+    res.status(401).json({
+      user: null,
+      debug: "token_invalid",
+      error: err.message
+    });
   }
 });
 app.get("/posts", async (req, res) => {
@@ -389,6 +427,24 @@ app.get("/test-cookie", (req, res) => {
     path: "/",
   });
   res.json({ message: "Test cookie set", cookies: req.cookies });
+});
+
+// Debug endpoint for OAuth troubleshooting
+app.get("/debug/oauth", (req, res) => {
+  res.json({
+    environment: process.env.NODE_ENV,
+    frontendUrl: process.env.FRONTEND_URL,
+    backendUrl: process.env.BACKEND_URL,
+    cookieName: process.env.COOKIE_NAME,
+    hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    cookies: req.cookies,
+    headers: {
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      userAgent: req.headers['user-agent']
+    }
+  });
 });
 
 app.listen(PORT, () => {

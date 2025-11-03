@@ -15,14 +15,28 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        const email = profile.emails[0]?.value;
-        const name = profile.displayName;
-        const profilePicture = profile.photos[0]?.value;
+        console.log("Google OAuth Strategy - Profile received:", {
+          id: profile.id,
+          displayName: profile.displayName,
+          emails: profile.emails,
+          photos: profile.photos
+        });
+
+        const email = profile.emails && profile.emails[0]?.value;
+        const name = profile.displayName || profile.name?.givenName + " " + profile.name?.familyName;
+        const profilePicture = profile.photos && profile.photos[0]?.value;
 
         if (!email) {
+          console.error("No email found in Google profile:", profile);
           return done(new Error("No email found in Google profile"), null);
         }
 
+        if (!name) {
+          console.error("No name found in Google profile:", profile);
+          return done(new Error("No name found in Google profile"), null);
+        }
+
+        // Check if user already exists
         const { data: existingUser, error: fetchError } = await supabase
           .from("Users")
           .select("*")
@@ -30,20 +44,35 @@ passport.use(
           .single();
 
         if (existingUser && !fetchError) {
-          console.log(
-            "Google OAuth: User already exists, logging in:",
-            existingUser.email
-          );
+          console.log("Google OAuth: User already exists, logging in:", existingUser.email);
+
+          // Update profile picture if it's different
+          if (profilePicture && existingUser.profile_picture !== profilePicture) {
+            const { error: updateError } = await supabase
+              .from("Users")
+              .update({ profile_picture: profilePicture })
+              .eq("id", existingUser.id);
+
+            if (updateError) {
+              console.warn("Failed to update profile picture:", updateError);
+            } else {
+              existingUser.profile_picture = profilePicture;
+            }
+          }
+
           return done(null, existingUser);
         }
 
+        // Create new user
+        console.log("Google OAuth: Creating new user for:", email);
         const { data: newUser, error: createError } = await supabase
           .from("Users")
           .insert([
             {
-              name,
-              email,
-              password: null,
+              name: name.trim(),
+              email: email.toLowerCase().trim(),
+              password: null, // OAuth users don't have passwords
+              profile_picture: profilePicture || null,
             },
           ])
           .select()
@@ -51,13 +80,29 @@ passport.use(
 
         if (createError) {
           console.error("Error creating new user:", createError);
+
+          // Handle specific database errors
+          if (createError.code === '23505') { // Unique constraint violation
+            console.log("User already exists, attempting to fetch existing user");
+            const { data: retryUser, error: retryError } = await supabase
+              .from("Users")
+              .select("*")
+              .eq("email", email)
+              .single();
+
+            if (retryUser && !retryError) {
+              return done(null, retryUser);
+            }
+          }
+
           return done(createError, null);
         }
 
-        console.log("Google OAuth: New user created:", newUser.email);
+        console.log("Google OAuth: New user created successfully:", newUser.email);
         return done(null, newUser);
       } catch (error) {
         console.error("Error in Google OAuth strategy:", error);
+        console.error("Error stack:", error.stack);
         return done(error, null);
       }
     }
